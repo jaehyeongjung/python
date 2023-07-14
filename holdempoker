@@ -1,0 +1,305 @@
+import random
+# 카드 덱 생성
+def create_deck():
+    suits = ['♠', '♥', '♦', '♣']
+    ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
+    deck = [(rank, suit) for suit in suits for rank in ranks]
+    random.shuffle(deck)
+    return deck
+
+# 플레이어 클래스
+
+class Player:
+    def __init__(self, name, initial_funds):
+        self.name = name
+        self.hand = []
+        self.funds = initial_funds
+        self.folded = False
+
+    def add_card(self, card):
+        self.hand.append(card)
+
+    def show_hand(self, reveal=True):
+        if reveal:
+            print(f"{self.name}'s hand: {self.hand}")
+        else:
+            print(f"{self.name}'s hand: [Hidden]")
+
+
+    def bet(self, amount):
+        if amount > self.funds:
+            print("잔액보다 많은 금액을 베팅할 수 없습니다.")
+            self.bet(int(input(f"{self.name}의 베팅 금액을 다시 입력하세요: ")))
+        else:
+            self.funds -= amount
+            print(f"{self.name}의 잔액: {self.funds}원")
+
+    def fold(self):
+        self.folded = True
+        print(f"{self.name}이 폴드하였습니다.")
+
+    def is_folded(self):
+        return self.folded
+
+# 게임 클래스
+class HoldemPoker:
+    def __init__(self, player_names, initial_funds):
+        self.deck = create_deck()
+        self.players = [Player(name, initial_funds) for name in player_names]
+        self.community_cards = []
+        self.dealer_index = 0
+        self.current_bets = {}
+        self.pot = 0
+        self.max_betting_rounds = 4
+        self.max_community_cards = 5
+        
+    def deal_hand(self):
+        for player in self.players:
+            player.hand = []
+            for _ in range(2):
+                card = self.deck.pop()
+                player.add_card(card)
+
+    def flop(self):
+        if len(self.community_cards) < 3:
+            for _ in range(3):
+                card = self.deck.pop()
+                self.community_cards.append(card)
+
+    def turn(self):
+        if len(self.community_cards) < 4:
+            card = self.deck.pop()
+            self.community_cards.append(card)
+
+    def river(self):
+        if len(self.community_cards) < 5:
+            card = self.deck.pop()
+            self.community_cards.append(card)
+
+    def bet(self, player, amount):
+        self.current_bets[player.name] = amount
+        self.pot += amount
+
+    def compute_computer_bet(self, player):
+      # 플레이어의 베팅 금액에 따라 컴퓨터의 판단을 조정합니다.
+      bet_ratio = self.current_bets[self.players[0].name] / player.funds
+
+      if bet_ratio < 0.2:  # 플레이어의 베팅 금액이 적을 때
+          # 20% 확률로 폴드
+          if random.random() < 0.2:
+              return 0
+          # 그 외에는 현재 베팅의 10~50% 사이의 금액으로 베팅
+          return random.randint(int(self.current_bets[self.players[0].name] * 0.1), int(self.current_bets[self.players[0].name] * 0.5))
+      elif bet_ratio < 0.5:  # 플레이어의 베팅 금액이 중간일 때
+          # 10% 확률로 폴드
+          if random.random() < 0.1:
+              return 0
+          # 그 외에는 현재 베팅의 30~70% 사이의 금액으로 베팅
+          return random.randint(int(self.current_bets[self.players[0].name] * 0.3), int(self.current_bets[self.players[0].name] * 0.7))
+      else:  # 플레이어의 베팅 금액이 많을 때
+          # 블러핑 기능 추가
+          if random.random() < 0.3:
+              # 30% 확률로 큰 금액을 베팅 (현재 베팅의 70~100% 사이)
+              return random.randint(int(self.current_bets[self.players[0].name] * 0.7), self.current_bets[self.players[0].name])
+          else:
+              # 그 외에는 현재 베팅의 50~70% 사이의 금액으로 베팅
+              return random.randint(int(self.current_bets[self.players[0].name] * 0.5), int(self.current_bets[self.players[0].name] * 0.7))
+      
+    def compute_computer_fold(self):
+    # 컴퓨터의 폴드 확률을 결정합니다.
+      if self.current_bets[self.players[0].name] > 10000:
+          fold_prob = 0.1  # 플레이어의 베팅 금액이 높을 때 폴드 확률 10%
+      else:
+          fold_prob = 0.05  # 플레이어의 베팅 금액이 낮을 때 폴드 확률 5%
+
+      if random.random() < fold_prob:
+          return True  # 폴드
+      else:
+          return False  # 폴드하지 않음
+
+    def show_community_cards(self):
+        print("Community cards: ", self.community_cards)
+
+    def show_players_hand(self):
+        for player in self.players:
+            if not player.is_folded() and player != self.players[1]:  # 컴퓨터의 패는 출력하지 않음
+                player.show_hand()
+
+    def evaluate_score(self):
+      scores = []
+      for player in self.players:
+          if not player.is_folded():
+              all_cards = player.hand + self.community_cards
+              score = self.calculate_score(all_cards)
+              scores.append((player.name, score))
+
+      scores.sort(key=lambda x: x[1], reverse=True)
+
+      if len(scores) > 0:
+          print(f"게임에서 승리한 플레이어는 {scores[0][0]}입니다!")
+          for player in self.players:
+              if player != self.players[1]:  # 컴퓨터의 패는 출력하지 않음
+                  player.show_hand()
+      else:
+          print("승리한 플레이어가 없습니다.")
+
+    def calculate_score(self, cards):
+      rank_counts = {}  # 각 카드 랭크의 개수를 저장하기 위한 딕셔너리
+      suits = set()  # 카드의 슈트를 저장하기 위한 집합
+
+      for rank, suit in cards:
+          if rank in rank_counts:
+              rank_counts[rank] += 1
+          else:
+              rank_counts[rank] = 1
+          suits.add(suit)
+
+      score = 0
+
+      # 포커 점수 계산 로직
+      # 차례대로 높은 순위의 조합을 판단하고 점수를 부여합니다.
+
+      # 로얄 플러시(Royal Flush) 여부 확인
+      is_royal_flush = (
+          len(suits) == 1 and
+          '10' in rank_counts and
+          'J' in rank_counts and
+          'Q' in rank_counts and
+          'K' in rank_counts and
+          'A' in rank_counts
+      )
+
+      # 스트레이트 플러시(Straight Flush) 여부 확인
+      is_straight_flush = False
+      if len(suits) == 1:
+          ranks = sorted(rank_counts.keys())
+          if ranks[-1] == 'A' and ranks[-2] == 'K' and ranks[-3] == 'Q' and ranks[-4] == 'J' and ranks[-5] == '10':
+              is_straight_flush = True
+          else:
+              for i in range(len(ranks) - 4):
+                  if ranks[i:i+5] == ['2', '3', '4', '5', 'A']:
+                      is_straight_flush = True
+                      break
+                  elif ranks[i:i+5] == ranks[i+1:i+6][::-1]:
+                      is_straight_flush = True
+                      break
+
+      # 포카드(Four of a Kind) 여부 확인
+      is_four_of_a_kind = any(count == 4 for count in rank_counts.values())
+
+      # 풀하우스(Full House) 여부 확인
+      is_full_house = any(count == 3 for count in rank_counts.values()) and any(count == 2 for count in rank_counts.values())
+
+      # 플러시(Flush) 여부 확인
+      is_flush = len(suits) == 1
+
+      # 스트레이트(Straight) 여부 확인
+      is_straight = False
+      ranks = sorted(rank_counts.keys())
+      if len(rank_counts) == 5 and (ranks[-1] == 'A' and ranks[-2] == 'K' and ranks[-3] == 'Q' and ranks[-4] == 'J' and ranks[-5] == '10'):
+          is_straight = True
+      else:
+          for i in range(len(ranks) - 4):
+              if ranks[i:i+5] == ['2', '3', '4', '5', 'A']:
+                  is_straight = True
+                  break
+              elif ranks[i:i+5] == ranks[i+1:i+6][::-1]:
+                  is_straight = True
+                  break
+
+      # 트리플(Triple) 여부 확인
+      is_triple = any(count == 3 for count in rank_counts.values())
+
+      # 투페어(Two Pair) 여부 확인
+      is_two_pair = sum(count == 2 for count in rank_counts.values()) >= 2
+
+      # 원 페어(One Pair) 여부 확인
+      is_one_pair = sum(count == 2 for count in rank_counts.values()) == 1
+
+      # 점수 부여 로직
+      if is_royal_flush:
+          score = 10000
+      elif is_straight_flush:
+          score = 9000
+      elif is_four_of_a_kind:
+          score = 8000
+      elif is_full_house:
+          score = 7000
+      elif is_flush:
+          score = 6000
+      elif is_straight:
+          score = 5000
+      elif is_triple:
+          score = 4000
+      elif is_two_pair:
+          score = 3000
+      elif is_one_pair:
+          score = 2000
+      else:
+          # 하이 카드(High Card)일 경우, 숫자 랭크를 이용한 점수 계산
+          high_card_ranks = sorted(rank_counts.keys(), key=lambda x: int(x, base=14), reverse=True)
+          score = int(high_card_ranks[0])
+
+      return score  # 점수 반환n
+
+    def play_game(self):
+      print("※※※※※※※※ Game Start ※※※※※※※※")
+      print("------- 각 플레이어에게는 자금 10만원이 주어집니다. -------")
+      self.deal_hand()
+      self.show_players_hand()
+
+      for betting_round in range(self.max_betting_rounds):
+          for player in self.players:
+              if player == self.players[0]:
+                  if player.is_folded():
+                      continue
+
+                  fold_input = input(f"{player.name}, 폴드하시겠습니까? (y/n): ")
+                  if fold_input.lower() == 'y':
+                      player.fold()
+                      print(f"{player.name}이 폴드하였습니다.")
+                      self.show_players_hand()  # 폴드한 플레이어의 패를 출력
+                      print("게임 종료")
+                      return  # 게임 종료
+                  else:
+                      bet_amount = int(input(f"{player.name}의 베팅 금액을 입력하세요: "))
+                      player.bet(bet_amount)
+                      self.bet(player, bet_amount)
+              else:
+                  if player.is_folded():
+                      continue
+
+                  if self.compute_computer_fold():
+                      player.fold()
+                      print(f"{player.name}이 폴드하였습니다.")
+                      self.show_players_hand()  # 폴드한 플레이어의 패를 출력
+                      print("게임 종료")
+                      self.show_computer_hand()
+                      return  # 게임 종료
+                  else:
+                      computer_bet = self.compute_computer_bet(player)
+                      player.bet(computer_bet)
+                      self.bet(player, computer_bet)
+                      print(f"{player.name}의 베팅 금액: {computer_bet}원")
+
+          if betting_round == 0:
+              self.flop()
+          elif betting_round == 1:
+              self.turn()
+          elif betting_round == 2:
+              self.river()
+
+          self.show_community_cards()
+
+      print("게임이 종료되었습니다.")
+      self.evaluate_score()  # 승자 결정
+      self.show_computer_hand()
+
+    def show_computer_hand(self):
+      for player in self.players[1:]:
+          player.show_hand(reveal=True)
+
+# 게임 시작 (PC와 대결하는 모드)
+initial_funds = 100000  # 초기 자금 설정
+game = HoldemPoker(["Player1", "Computer"], initial_funds)
+game.play_game()          
